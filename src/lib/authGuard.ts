@@ -90,3 +90,7 @@ export function checkZoneAccess(
     redirectPath: userRole === 'CUSTOMER' ? '/account' : '/admin',
   };
 }
+
+// Re-export full Phase 7.14 Permission and Tenant Isolation Security Engine
+export * from './permissions';
+

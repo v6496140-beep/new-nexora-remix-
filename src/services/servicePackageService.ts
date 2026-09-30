@@ -378,7 +378,13 @@ export class ServicePackageConfigService {
 
   public listServicesByTenant(tenantBusinessId: string): ServiceBookingConfig[] {
     return Array.from(this.services.values())
-      .filter((s) => s.businessId === tenantBusinessId)
+      .filter((s) => 
+        s.businessId === tenantBusinessId ||
+        (tenantBusinessId === 'biz-barber-01' && s.businessId === 'biz-barber-001') ||
+        (tenantBusinessId === 'biz-barber-001' && s.businessId === 'biz-barber-01') ||
+        (tenantBusinessId === 'biz-spa-02' && s.businessId === 'biz-spa-002') ||
+        (tenantBusinessId === 'biz-spa-002' && s.businessId === 'biz-spa-02')
+      )
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
@@ -432,7 +438,12 @@ export class ServicePackageConfigService {
 
   public listPackagesByTenant(tenantBusinessId: string): PackageBookingConfig[] {
     return Array.from(this.packages.values()).filter(
-      (p) => p.businessId === tenantBusinessId
+      (p) => 
+        p.businessId === tenantBusinessId ||
+        (tenantBusinessId === 'biz-barber-01' && p.businessId === 'biz-barber-001') ||
+        (tenantBusinessId === 'biz-barber-001' && p.businessId === 'biz-barber-01') ||
+        (tenantBusinessId === 'biz-spa-02' && p.businessId === 'biz-spa-002') ||
+        (tenantBusinessId === 'biz-spa-002' && p.businessId === 'biz-spa-02')
     );
   }
 
@@ -449,7 +460,12 @@ export class ServicePackageConfigService {
 
   public listStaffByTenant(tenantBusinessId: string): SalonStaffMember[] {
     return Array.from(this.staff.values()).filter(
-      (s) => s.businessId === tenantBusinessId
+      (s) => 
+        s.businessId === tenantBusinessId ||
+        (tenantBusinessId === 'biz-barber-01' && s.businessId === 'biz-barber-001') ||
+        (tenantBusinessId === 'biz-barber-001' && s.businessId === 'biz-barber-01') ||
+        (tenantBusinessId === 'biz-spa-02' && s.businessId === 'biz-spa-002') ||
+        (tenantBusinessId === 'biz-spa-002' && s.businessId === 'biz-spa-02')
     );
   }
 

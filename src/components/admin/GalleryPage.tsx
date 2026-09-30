@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Eye, EyeOff, Star } from 'lucide-react';
+import { useAuth } from '../../services/authContext';
 
 // Mock Gallery Service for now, replacing with real integration if needed
 const galleryService = {
@@ -11,7 +12,8 @@ const galleryService = {
 };
 
 export function GalleryPage() {
-  const tenantId = 'biz-barber-001';
+  const { session } = useAuth();
+  const tenantId = session?.businessId || 'biz-barber-01';
   const [items] = useState(galleryService.getGallery(tenantId));
 
   return (

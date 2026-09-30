@@ -1,13 +1,14 @@
 import React from 'react';
-import { AdminShell } from './AdminShell';
+import { Layers } from 'lucide-react';
 
-export function BusinessAdminPlaceholder() {
+export function BusinessAdminPlaceholder({ title = 'Module Under Construction', description = 'This operational section is being prepared according to tenant access policies.' }: { title?: string; description?: string }) {
   return (
-    <AdminShell>
-      <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center">
-        <h1 className="text-2xl font-bold text-slate-900">Module Under Construction</h1>
-        <p className="text-slate-500 mt-2">This feature is coming soon in the next phase of Nexora SalonOS.</p>
+    <div className="bg-white p-12 rounded-3xl border-2 border-slate-100 shadow-sm text-center max-w-2xl mx-auto my-8 space-y-4">
+      <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+        <Layers className="w-8 h-8" />
       </div>
-    </AdminShell>
+      <h2 className="text-2xl font-black text-slate-900 tracking-tight">{title}</h2>
+      <p className="text-slate-500 text-sm font-medium leading-relaxed">{description}</p>
+    </div>
   );
 }

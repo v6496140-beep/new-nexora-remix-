@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle, XCircle, EyeOff } from 'lucide-react';
+import { useAuth } from '../../services/authContext';
 
 // Mock Reviews Service
 const reviewsService = {
@@ -11,7 +12,8 @@ const reviewsService = {
 };
 
 export function ReviewsPage() {
-  const tenantId = 'biz-barber-001';
+  const { session } = useAuth();
+  const tenantId = session?.businessId || 'biz-barber-01';
   const [reviews] = useState(reviewsService.getReviews(tenantId));
 
   return (

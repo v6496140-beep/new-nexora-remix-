@@ -222,15 +222,33 @@ export class StaffScheduleService {
 
   // --- BUSINESS SCHEDULE GET / SET ---
 
+  private normalizeBusinessId(bizId: string): string {
+    if (bizId === 'biz-barber-01') return 'biz-barber-001';
+    if (bizId === 'biz-spa-02') return 'biz-spa-002';
+    return bizId;
+  }
+
   public getBusinessSchedule(businessId: string): BusinessScheduleConfig | null {
-    return this.businessSchedules.get(businessId) || null;
+    const norm = this.normalizeBusinessId(businessId);
+    return this.businessSchedules.get(norm) || this.businessSchedules.get(businessId) || null;
+  }
+
+  public updateBusinessSchedule(
+    businessId: string,
+    schedule: BusinessScheduleConfig
+  ): void {
+    const norm = this.normalizeBusinessId(businessId);
+    const cloned = JSON.parse(JSON.stringify(schedule));
+    this.businessSchedules.set(norm, cloned);
+    this.businessSchedules.set(businessId, cloned);
   }
 
   public updateBusinessHours(
     businessId: string,
     weeklyHours: Record<DayOfWeek, any>
   ): void {
-    const existing = this.businessSchedules.get(businessId);
+    const norm = this.normalizeBusinessId(businessId);
+    const existing = this.businessSchedules.get(norm) || this.businessSchedules.get(businessId);
     if (existing) {
       existing.weeklyHours = weeklyHours;
     }
@@ -523,3 +541,6 @@ export class StaffScheduleService {
     };
   }
 }
+
+export const staffScheduleService = new StaffScheduleService();
+

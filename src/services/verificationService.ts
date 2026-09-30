@@ -11,6 +11,7 @@ import {
   OwnerVerificationView, 
   AdminVerificationView 
 } from '../types';
+import { auditLogService } from './auditLogService';
 
 // In-memory audit history store seeded with historical compliance actions
 const INITIAL_HISTORY: BusinessVerificationHistory[] = [
@@ -326,6 +327,18 @@ class VerificationService {
     };
     this.history.push(historyEntry);
 
+    // Record in Global Audit Log
+    auditLogService.recordAuditLog({
+      user: { id: adminId, name: 'System Super Admin', email: 'admin@nexora.salon' },
+      role: 'SUPER_ADMIN',
+      businessId: business.id,
+      businessName: business.name,
+      action: 'BUSINESS_VERIFICATION',
+      entity: 'Business',
+      entityId: business.id,
+      metadata: { previousStatus, newStatus, notes: business.verificationNotes }
+    });
+
     // Sync with Supabase if online
     try {
       await supabase
@@ -476,6 +489,18 @@ class VerificationService {
       createdAt: now
     };
     this.history.push(historyEntry);
+
+    // Record in Global Audit Log
+    auditLogService.recordAuditLog({
+      user: { id: adminId, name: 'System Super Admin', email: 'admin@nexora.salon' },
+      role: 'SUPER_ADMIN',
+      businessId: business.id,
+      businessName: business.name,
+      action: 'BUSINESS_SUSPENSION',
+      entity: 'Business',
+      entityId: business.id,
+      metadata: { previousStatus, newStatus, reason, notes: business.verificationNotes }
+    });
 
     // Sync with Supabase if online
     try {
