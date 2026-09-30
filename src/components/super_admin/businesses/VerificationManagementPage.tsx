@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle, 
   XCircle, 
@@ -11,21 +11,54 @@ import {
   FileText,
   MessageSquare,
   History,
-  MoreVertical,
-  Check
+  Check,
+  UserCheck,
+  ArrowRight,
+  Calendar
 } from 'lucide-react';
-import { SEEDED_PUBLIC_BUSINESSES } from '../../../data/seededPublicBusinesses';
-import { Business, VerificationStatus } from '../../../types';
+import { Business, VerificationStatus, BusinessVerificationHistory } from '../../../types';
+import { verificationService } from '../../../services/verificationService';
 
 export function VerificationManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<VerificationStatus | 'all'>('all');
   const [selectedRequest, setSelectedRequest] = useState<Business | null>(null);
-  const [rejectionReason, setRejectionReason] = useState('');
+  const [actionReason, setActionReason] = useState('');
+  const [adminNotes, setAdminNotes] = useState('');
   const [showActionModal, setShowActionModal] = useState<'approve' | 'reject' | 'review' | 'suspend' | null>(null);
+  const [historyRecords, setHistoryRecords] = useState<BusinessVerificationHistory[]>([]);
+  const [localBusinesses, setLocalBusinesses] = useState<Business[]>([]);
 
-  // SESSION STATE (Persistent for the session as per Phase 7.12 style)
-  const [localBusinesses, setLocalBusinesses] = useState<Business[]>(Object.values(SEEDED_PUBLIC_BUSINESSES));
+  // Load businesses from service on mount
+  useEffect(() => {
+    refreshBusinesses();
+  }, []);
+
+  const refreshBusinesses = () => {
+    const list = verificationService.getAllBusinesses();
+    setLocalBusinesses(list);
+    if (selectedRequest) {
+      const updated = verificationService.getBusiness(selectedRequest.id);
+      if (updated) {
+        setSelectedRequest(updated);
+        loadHistory(updated.id);
+      }
+    }
+  };
+
+  const loadHistory = (bizId: string) => {
+    try {
+      const records = verificationService.getVerificationHistory(bizId, 'sa-super-admin', 'SUPER_ADMIN');
+      setHistoryRecords(records);
+    } catch {
+      setHistoryRecords([]);
+    }
+  };
+
+  const handleSelectBusiness = (biz: Business) => {
+    setSelectedRequest(biz);
+    loadHistory(biz.id);
+  };
 
   const filteredRequests = localBusinesses.filter(biz => {
     const matchesSearch = biz.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -34,13 +67,45 @@ export function VerificationManagementPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const updateVerification = (bizId: string, status: VerificationStatus, notes?: string) => {
-    setLocalBusinesses(prev => prev.map(biz => 
-      biz.id === bizId ? { ...biz, verificationStatus: status, verificationNotes: notes || biz.verificationNotes } : biz
-    ));
-    setShowActionModal(null);
-    setSelectedRequest(null);
-    alert(`Business verification updated to: ${status}`);
+  const handleExecuteAction = async () => {
+    if (!selectedRequest || !showActionModal) return;
+
+    try {
+      const currentAdminId = 'user-sa-admin-01'; // Authorized Super Admin ID
+      const currentAdminRole = 'SUPER_ADMIN';
+
+      if (showActionModal === 'approve') {
+        await verificationService.approveVerification(
+          selectedRequest.id,
+          currentAdminId,
+          currentAdminRole,
+          adminNotes || 'Verification approved: KYC & registry documents verified'
+        );
+      } else if (showActionModal === 'reject') {
+        await verificationService.rejectVerification(
+          selectedRequest.id,
+          currentAdminId,
+          currentAdminRole,
+          actionReason,
+          adminNotes
+        );
+      } else if (showActionModal === 'suspend') {
+        await verificationService.suspendVerification(
+          selectedRequest.id,
+          currentAdminId,
+          currentAdminRole,
+          actionReason,
+          adminNotes
+        );
+      }
+
+      setShowActionModal(null);
+      setActionReason('');
+      setAdminNotes('');
+      refreshBusinesses();
+    } catch (err: any) {
+      alert(`Action failed: ${err.message}`);
+    }
   };
 
   const getStatusBadge = (status: VerificationStatus) => {
@@ -73,6 +138,10 @@ export function VerificationManagementPage() {
           <div className="bg-white px-4 py-2 rounded-xl border-2 border-slate-100 shadow-sm flex flex-col items-center">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reviewing</span>
             <span className="text-xl font-black text-indigo-600">{localBusinesses.filter(b => b.verificationStatus === 'under_review').length}</span>
+          </div>
+          <div className="bg-white px-4 py-2 rounded-xl border-2 border-slate-100 shadow-sm flex flex-col items-center">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Verified</span>
+            <span className="text-xl font-black text-green-600">{localBusinesses.filter(b => b.verificationStatus === 'verified').length}</span>
           </div>
         </div>
       </div>
@@ -154,7 +223,7 @@ export function VerificationManagementPage() {
                   </td>
                   <td className="p-4 text-right">
                     <button 
-                      onClick={() => setSelectedRequest(biz)}
+                      onClick={() => handleSelectBusiness(biz)}
                       className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl border border-transparent hover:border-indigo-100 transition-all shadow-sm group-hover:shadow-indigo-100"
                     >
                       <Eye className="w-4 h-4" />
@@ -202,7 +271,7 @@ export function VerificationManagementPage() {
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/30">
-              {/* Compliance Status */}
+              {/* Compliance Status Cards */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white p-5 rounded-3xl border-2 border-slate-100 shadow-sm">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Current Status</span>
@@ -210,33 +279,66 @@ export function VerificationManagementPage() {
                 </div>
                 <div className="bg-white p-5 rounded-3xl border-2 border-slate-100 shadow-sm">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Submission Date</span>
-                  <span className="text-sm font-black text-slate-700">{selectedRequest.verificationSubmittedAt ? new Date(selectedRequest.verificationSubmittedAt).toLocaleString() : 'Not Submitted'}</span>
+                  <span className="text-sm font-black text-slate-700">
+                    {selectedRequest.verificationSubmittedAt ? new Date(selectedRequest.verificationSubmittedAt).toLocaleString() : 'Not Submitted'}
+                  </span>
                 </div>
+                {selectedRequest.verifiedAt && (
+                  <div className="bg-white p-5 rounded-3xl border-2 border-slate-100 shadow-sm">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Verified At</span>
+                    <span className="text-xs font-bold text-green-700">{new Date(selectedRequest.verifiedAt).toLocaleString()}</span>
+                  </div>
+                )}
+                {selectedRequest.verifiedBy && (
+                  <div className="bg-white p-5 rounded-3xl border-2 border-slate-100 shadow-sm">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Verified By</span>
+                    <span className="text-xs font-mono font-bold text-slate-700">{selectedRequest.verifiedBy}</span>
+                  </div>
+                )}
               </div>
 
-              {/* Owner Info */}
+              {/* Rejection / Suspension Alert if applicable */}
+              {selectedRequest.rejectionReason && (
+                <div className="p-5 bg-rose-50 border-2 border-rose-100 rounded-3xl space-y-2">
+                  <div className="flex items-center gap-2 text-rose-700 font-bold text-xs uppercase tracking-wide">
+                    <XCircle className="w-4 h-4" /> Official Rejection Reason
+                  </div>
+                  <p className="text-sm text-rose-900 font-medium">{selectedRequest.rejectionReason}</p>
+                </div>
+              )}
+
+              {selectedRequest.suspensionReason && (
+                <div className="p-5 bg-slate-100 border-2 border-slate-200 rounded-3xl space-y-2">
+                  <div className="flex items-center gap-2 text-slate-700 font-bold text-xs uppercase tracking-wide">
+                    <AlertCircle className="w-4 h-4" /> Suspension Reason
+                  </div>
+                  <p className="text-sm text-slate-900 font-medium">{selectedRequest.suspensionReason}</p>
+                </div>
+              )}
+
+              {/* Owner Info & KYC */}
               <div className="space-y-4">
                 <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                  <ShieldCheck className="w-3 h-3" /> Entity Authentication
+                  <ShieldCheck className="w-3 h-3" /> Entity Authentication & Credentials
                 </h3>
                 <div className="bg-white rounded-3xl border-2 border-slate-100 shadow-sm overflow-hidden">
                   <div className="p-6 flex items-center gap-4 border-b border-slate-50">
                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-indigo-600">
-                        <FileText className="w-5 h-5" />
+                      <FileText className="w-5 h-5" />
                     </div>
                     <div className="flex-1">
-                        <div className="text-xs font-black text-slate-900 uppercase">GST/VAT Registration</div>
-                        <div className="text-[10px] font-medium text-slate-500">Verified against national registry</div>
+                      <div className="text-xs font-black text-slate-900 uppercase">GST/VAT & Legal Entity Proof</div>
+                      <div className="text-[10px] font-medium text-slate-500">Commercial Registration verified with registry</div>
                     </div>
                     <Check className="w-4 h-4 text-green-500" />
                   </div>
                   <div className="p-6 flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-indigo-600">
-                        <MessageSquare className="w-5 h-5" />
+                      <MessageSquare className="w-5 h-5" />
                     </div>
                     <div className="flex-1">
-                        <div className="text-xs font-black text-slate-900 uppercase">Owner Identity (KYC)</div>
-                        <div className="text-[10px] font-medium text-slate-500">Photo ID & Phone Linked</div>
+                      <div className="text-xs font-black text-slate-900 uppercase">Owner Identity (KYC)</div>
+                      <div className="text-[10px] font-medium text-slate-500">Government Photo ID & Linked Contact Verified</div>
                     </div>
                     <Check className="w-4 h-4 text-green-500" />
                   </div>
@@ -246,14 +348,63 @@ export function VerificationManagementPage() {
               {/* Admin Notes */}
               <div className="space-y-4">
                 <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                  <History className="w-3 h-3" /> Internal Audit Log
+                  <UserCheck className="w-3 h-3" /> Compliance Notes
                 </h3>
                 <div className="bg-indigo-900 text-white p-6 rounded-3xl shadow-xl shadow-indigo-100">
-                  <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-3 italic">System Insight</p>
+                  <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-2 italic">Auditor Observations</p>
                   <p className="text-sm font-medium leading-relaxed">
-                    {selectedRequest.verificationNotes || "No audit notes available for this entity. Submission appears compliant with Nexus Tier-1 standards."}
+                    {selectedRequest.verificationNotes || "No internal notes recorded. Submission compliant with platform standard."}
                   </p>
                 </div>
+              </div>
+
+              {/* Dedicated Audit Table: business_verification_history */}
+              <div className="space-y-4">
+                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <History className="w-3 h-3" /> Verification History Log (business_verification_history)
+                </h3>
+                {historyRecords.length > 0 ? (
+                  <div className="space-y-3">
+                    {historyRecords.map((record) => (
+                      <div key={record.id} className="p-4 bg-white rounded-2xl border-2 border-slate-100 shadow-sm space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            {record.previousStatus ? (
+                              <span className="text-[10px] font-mono text-slate-400 font-bold uppercase">{record.previousStatus}</span>
+                            ) : (
+                              <span className="text-[10px] font-mono text-slate-400 font-bold uppercase">initial</span>
+                            )}
+                            <ArrowRight className="w-3 h-3 text-slate-400" />
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                              {record.newStatus}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(record.createdAt).toLocaleDateString()} {new Date(record.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                        {record.reason && (
+                          <div className="text-xs font-semibold text-slate-800">
+                            Reason: <span className="font-normal text-slate-600">{record.reason}</span>
+                          </div>
+                        )}
+                        {record.notes && (
+                          <div className="text-[11px] text-slate-500 italic bg-slate-50 p-2 rounded-xl">
+                            {record.notes}
+                          </div>
+                        )}
+                        <div className="text-[9px] font-mono text-slate-400">
+                          Changed by: {record.changedBy} • Ref: {record.id}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-6 bg-slate-50 rounded-2xl border text-center text-xs text-slate-400">
+                    No historical transitions recorded yet.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -303,21 +454,35 @@ export function VerificationManagementPage() {
               <div>
                 <h4 className="text-2xl font-black text-slate-900 tracking-tight capitalize">{showActionModal} Entity?</h4>
                 <p className="text-slate-500 text-sm font-medium mt-2">
-                  Confirming this action will update the business profile across the entire Nexora discovery network.
+                  Confirming this action will update the business status and record an immutable audit entry in business_verification_history.
                 </p>
               </div>
 
               {(showActionModal === 'reject' || showActionModal === 'suspend') && (
                 <div className="text-left space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Official Reason</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">
+                    Official Reason <span className="text-rose-500">*</span>
+                  </label>
                   <textarea 
-                    className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-rose-500 transition-all text-sm font-medium h-32"
+                    className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-rose-500 transition-all text-sm font-medium h-24"
                     placeholder="Provide detailed compliance failure reason..."
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
+                    value={actionReason}
+                    onChange={(e) => setActionReason(e.target.value)}
                   />
                 </div>
               )}
+
+              <div className="text-left space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">
+                  Internal Compliance Notes (Optional)
+                </label>
+                <textarea 
+                  className="w-full px-6 py-3 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:border-indigo-500 transition-all text-xs font-medium h-20"
+                  placeholder="Private internal notes for platform auditors..."
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <button 
@@ -327,11 +492,8 @@ export function VerificationManagementPage() {
                   Cancel
                 </button>
                 <button 
-                  onClick={() => {
-                    const status: VerificationStatus = showActionModal === 'approve' ? 'verified' : (showActionModal === 'reject' ? 'rejected' : 'suspended');
-                    updateVerification(selectedRequest.id, status, rejectionReason);
-                  }}
-                  disabled={(showActionModal === 'reject' || showActionModal === 'suspend') && !rejectionReason.trim()}
+                  onClick={handleExecuteAction}
+                  disabled={(showActionModal === 'reject' || showActionModal === 'suspend') && !actionReason.trim()}
                   className={`py-4 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl disabled:opacity-50 ${
                     showActionModal === 'approve' ? 'bg-green-600 shadow-green-100 hover:bg-green-700' : 
                     showActionModal === 'reject' ? 'bg-rose-600 shadow-rose-100 hover:bg-rose-700' :

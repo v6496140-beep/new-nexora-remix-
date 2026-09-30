@@ -121,14 +121,21 @@ export interface Business {
   templateId: string;
   themeId: string;
   status: 'active' | 'suspended' | 'pending_verification';
+  // Preferred verification fields
   verificationStatus: VerificationStatus;
-  verificationNotes?: string;
-  verificationSubmittedAt?: string;
+  verificationSubmittedAt?: string | null;
+  verifiedAt?: string | null;
+  verifiedBy?: string | null;
+  rejectionReason?: string | null;
+  suspensionReason?: string | null;
+  verificationNotes?: string | null;
   isFeatured?: boolean;
   featuredUntil?: string;
   createdAt: string;
   updatedAt: string;
 }
+
+export * from './verification';
 
 // -------------------------------------------------------------
 // THEME & TEMPLATE CONTRACTS

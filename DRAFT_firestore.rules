@@ -58,7 +58,10 @@ service cloud.firestore {
     }
 
     match /businesses/{businessId} {
-      allow read: if isSignedIn(); // Basic discovery
+      // Public discovery: only verified businesses are readable by unprivileged/customer users
+      allow read: if isSuperAdmin() || 
+                     (isSignedIn() && isOwner(existing().ownerId)) || 
+                     existing().verificationStatus == 'verified';
       
       // Creating a business always starts as 'pending'
       allow create: if isSignedIn() && isValidBusiness(incoming()) && 
@@ -66,35 +69,58 @@ service cloud.firestore {
                     isValidId(businessId);
 
       allow update: if isSignedIn() && (
-        // Action: Self Update (Limited fields)
+        // Action: Business Owner Update (Can update details or submit for review; CANNOT self-verify or suspend)
         (isOwner(existing().ownerId) && 
          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'slug', 'verificationStatus', 'verificationSubmittedAt']) &&
          (existing().verificationStatus != 'verified' || incoming().verificationStatus == existing().verificationStatus) &&
          (incoming().verificationStatus in ['pending', 'under_review'])) ||
         
-        // Action: Admin Verification
+        // Action: Super Admin Verification (Only authorized admin users can approve/reject/suspend)
         (isSuperAdmin() && 
-         incoming().diff(existing()).affectedKeys().hasAny(['verificationStatus', 'verifiedAt', 'verifiedBy', 'rejectionReason', 'verificationNotes']) &&
-         // Atomic history check (conceptually enforced via existsAfter in batch)
-         existsAfter(/databases/$(database)/documents/verification_history/$(request.id)))
+         incoming().diff(existing()).affectedKeys().hasAny(['verificationStatus', 'verifiedAt', 'verifiedBy', 'rejectionReason', 'suspensionReason', 'verificationNotes']) &&
+         // Mandatory audit trail entry in business_verification_history
+         (existsAfter(/databases/$(database)/documents/business_verification_history/$(request.id)) ||
+          existsAfter(/databases/$(database)/documents/verification_history/$(request.id))))
       );
     }
 
     // ---------------------------------------------------------
-    // VERIFICATION HISTORY
+    // BUSINESS VERIFICATION HISTORY (Dedicated Audit Log)
     // ---------------------------------------------------------
     function isValidHistory(data) {
       return data.keys().hasAll(['businessId', 'newStatus', 'changedBy', 'createdAt']) &&
              data.businessId is string &&
-             data.newStatus is string &&
+             data.newStatus in ['pending', 'under_review', 'verified', 'rejected', 'suspended'] &&
              data.changedBy == request.auth.uid &&
              data.createdAt == request.time;
     }
 
+    match /business_verification_history/{historyId} {
+      // Customers: Denied
+      // Business Owners: can only read their own business verification history
+      // Super Admins: full read and write
+      allow read: if isSignedIn() && (
+        isSuperAdmin() || 
+        isOwner(get(/databases/$(database)/documents/businesses/$(existing().businessId)).data.ownerId)
+      );
+      
+      // Only authorized admins or business owners creating submission transitions can append history
+      allow create: if isSignedIn() && isValidHistory(incoming()) && (
+        isSuperAdmin() || 
+        (incoming().newStatus == 'under_review' && isOwner(get(/databases/$(database)/documents/businesses/$(incoming().businessId)).data.ownerId))
+      );
+    }
+
+    // Backward compatibility match for /verification_history
     match /verification_history/{historyId} {
-      allow read: if isSignedIn() && (isSuperAdmin() || isOwner(get(/databases/$(database)/documents/businesses/$(existing().businessId)).data.ownerId));
-      allow create: if isSignedIn() && isValidHistory(incoming()) &&
-                    (isSuperAdmin() || isOwner(get(/databases/$(database)/documents/businesses/$(incoming().businessId)).data.ownerId));
+      allow read: if isSignedIn() && (
+        isSuperAdmin() || 
+        isOwner(get(/databases/$(database)/documents/businesses/$(existing().businessId)).data.ownerId)
+      );
+      allow create: if isSignedIn() && isValidHistory(incoming()) && (
+        isSuperAdmin() || 
+        (incoming().newStatus == 'under_review' && isOwner(get(/databases/$(database)/documents/businesses/$(incoming().businessId)).data.ownerId))
+      );
     }
   }
 }

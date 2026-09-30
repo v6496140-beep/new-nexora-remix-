@@ -25,32 +25,32 @@
         "verificationStatus": { 
           "type": "string", 
           "enum": ["pending", "under_review", "verified", "rejected", "suspended"],
-          "description": "Current trust status of the entity"
+          "description": "Current trust status of the entity (publicly visible verification state)"
         },
         "verificationSubmittedAt": { "type": "string", "format": "date-time" },
         "verifiedAt": { "type": "string", "format": "date-time" },
-        "verifiedBy": { "type": "string", "description": "UID of the admin who approved" },
-        "rejectionReason": { "type": "string" },
-        "suspensionReason": { "type": "string" },
-        "verificationNotes": { "type": "string", "description": "Internal admin audit notes" },
+        "verifiedBy": { "type": "string", "description": "UID of the admin who approved (Sensitive)" },
+        "rejectionReason": { "type": "string", "description": "Private reason if rejected" },
+        "suspensionReason": { "type": "string", "description": "Private reason if suspended" },
+        "verificationNotes": { "type": "string", "description": "Internal admin audit notes (Sensitive)" },
         "isFeatured": { "type": "boolean" },
         "featuredUntil": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name", "ownerId", "verificationStatus"]
     },
-    "VerificationHistory": {
-      "title": "Verification Audit Log",
-      "description": "Historical record of all verification status transitions for auditing.",
+    "BusinessVerificationHistory": {
+      "title": "Business Verification History",
+      "description": "Historical audit log of all verification status transitions for auditing without overwriting past data.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "businessId": { "type": "string" },
-        "previousStatus": { "type": "string" },
-        "newStatus": { "type": "string" },
-        "reason": { "type": "string" },
-        "notes": { "type": "string" },
-        "changedBy": { "type": "string", "description": "UID of the admin or system" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": { "type": "string", "description": "Unique audit record ID" },
+        "businessId": { "type": "string", "description": "Foreign key to business" },
+        "previousStatus": { "type": "string", "description": "Previous verification status before update" },
+        "newStatus": { "type": "string", "description": "New verification status" },
+        "reason": { "type": "string", "description": "Reason for rejection, suspension, or approval notes" },
+        "notes": { "type": "string", "description": "Internal auditor notes" },
+        "changedBy": { "type": "string", "description": "UID of the admin or system who made the change" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of status change" }
       },
       "required": ["businessId", "newStatus", "changedBy", "createdAt"]
     }
@@ -64,9 +64,9 @@
       "schema": "Business",
       "description": "Global registry of all platform tenants"
     },
-    "/verification_history/{historyId}": {
-      "schema": "VerificationHistory",
-      "description": "Audit logs for compliance and trust engine"
+    "/business_verification_history/{historyId}": {
+      "schema": "BusinessVerificationHistory",
+      "description": "Dedicated verification audit log for compliance and trust engine"
     }
   }
 }
