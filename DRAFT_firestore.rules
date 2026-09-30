@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ---------------------------------------------------------
+    // GLOBAL HELPERS
+    // ---------------------------------------------------------
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(ownerId) { return isSignedIn() && request.auth.uid == ownerId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // Role Lookup
+    function getRole() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role;
+    }
+    function isSuperAdmin() {
+      return isSignedIn() && getRole() == 'SUPER_ADMIN';
+    }
+
+    // ---------------------------------------------------------
+    // DEFAULT DENY
+    // ---------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------
+    // PROFILES
+    // ---------------------------------------------------------
+    function isValidProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.keys().hasOnly(['uid', 'email', 'role', 'fullName', 'isActive']) &&
+             data.uid == request.auth.uid &&
+             data.email is string &&
+             data.role in ['SUPER_ADMIN', 'BUSINESS_OWNER', 'MANAGER', 'STAFF', 'CUSTOMER'];
+    }
+
+    match /profiles/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isSuperAdmin());
+      allow create: if isSignedIn() && isValidProfile(incoming()) && incoming().role != 'SUPER_ADMIN';
+      allow update: if isSignedIn() && isOwner(uid) && isValidProfile(incoming()) && 
+                    incoming().role == existing().role; // Prevents self-promotion
+    }
+
+    // ---------------------------------------------------------
+    // BUSINESSES
+    // ---------------------------------------------------------
+    function isValidBusiness(data) {
+      return data.keys().hasAll(['id', 'name', 'ownerId', 'verificationStatus']) &&
+             data.keys().hasOnly(['id', 'name', 'slug', 'ownerId', 'verificationStatus', 'verificationSubmittedAt', 
+                                 'verifiedAt', 'verifiedBy', 'rejectionReason', 'suspensionReason', 
+                                 'verificationNotes', 'isFeatured', 'featuredUntil']) &&
+             data.id is string && data.id.size() <= 64 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.ownerId == request.auth.uid &&
+             data.verificationStatus in ['pending', 'under_review', 'verified', 'rejected', 'suspended'];
+    }
+
+    match /businesses/{businessId} {
+      allow read: if isSignedIn(); // Basic discovery
+      
+      // Creating a business always starts as 'pending'
+      allow create: if isSignedIn() && isValidBusiness(incoming()) && 
+                    incoming().verificationStatus == 'pending' &&
+                    isValidId(businessId);
+
+      allow update: if isSignedIn() && (
+        // Action: Self Update (Limited fields)
+        (isOwner(existing().ownerId) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'slug', 'verificationStatus', 'verificationSubmittedAt']) &&
+         (existing().verificationStatus != 'verified' || incoming().verificationStatus == existing().verificationStatus) &&
+         (incoming().verificationStatus in ['pending', 'under_review'])) ||
+        
+        // Action: Admin Verification
+        (isSuperAdmin() && 
+         incoming().diff(existing()).affectedKeys().hasAny(['verificationStatus', 'verifiedAt', 'verifiedBy', 'rejectionReason', 'verificationNotes']) &&
+         // Atomic history check (conceptually enforced via existsAfter in batch)
+         existsAfter(/databases/$(database)/documents/verification_history/$(request.id)))
+      );
+    }
+
+    // ---------------------------------------------------------
+    // VERIFICATION HISTORY
+    // ---------------------------------------------------------
+    function isValidHistory(data) {
+      return data.keys().hasAll(['businessId', 'newStatus', 'changedBy', 'createdAt']) &&
+             data.businessId is string &&
+             data.newStatus is string &&
+             data.changedBy == request.auth.uid &&
+             data.createdAt == request.time;
+    }
+
+    match /verification_history/{historyId} {
+      allow read: if isSignedIn() && (isSuperAdmin() || isOwner(get(/databases/$(database)/documents/businesses/$(existing().businessId)).data.ownerId));
+      allow create: if isSignedIn() && isValidHistory(incoming()) &&
+                    (isSuperAdmin() || isOwner(get(/databases/$(database)/documents/businesses/$(incoming().businessId)).data.ownerId));
+    }
+  }
+}

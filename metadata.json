@@ -1,0 +1,8 @@
+{
+  "name": "Remix Nexora SalonOS - Architecture \u0026 Wireframes",
+  "description": "Product Architecture, Information Architecture, Role Matrix, User Flows, and Low-Fidelity Wireframes for Nexora SalonOS SaaS Platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Global platform user account with role-based access control.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "BUSINESS_OWNER", "MANAGER", "STAFF", "CUSTOMER"] },
+        "fullName": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Business": {
+      "title": "Business Entity",
+      "description": "Represents a salon, spa, or service provider tenant on the Nexora platform.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique business ID" },
+        "name": { "type": "string", "description": "Legal business name" },
+        "slug": { "type": "string", "description": "URL-friendly slug" },
+        "ownerId": { "type": "string", "description": "UID of the business owner" },
+        "verificationStatus": { 
+          "type": "string", 
+          "enum": ["pending", "under_review", "verified", "rejected", "suspended"],
+          "description": "Current trust status of the entity"
+        },
+        "verificationSubmittedAt": { "type": "string", "format": "date-time" },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "verifiedBy": { "type": "string", "description": "UID of the admin who approved" },
+        "rejectionReason": { "type": "string" },
+        "suspensionReason": { "type": "string" },
+        "verificationNotes": { "type": "string", "description": "Internal admin audit notes" },
+        "isFeatured": { "type": "boolean" },
+        "featuredUntil": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "ownerId", "verificationStatus"]
+    },
+    "VerificationHistory": {
+      "title": "Verification Audit Log",
+      "description": "Historical record of all verification status transitions for auditing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "previousStatus": { "type": "string" },
+        "newStatus": { "type": "string" },
+        "reason": { "type": "string" },
+        "notes": { "type": "string" },
+        "changedBy": { "type": "string", "description": "UID of the admin or system" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["businessId", "newStatus", "changedBy", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/profiles/{uid}": {
+      "schema": "User",
+      "description": "Authenticated user profiles with RBAC roles"
+    },
+    "/businesses/{businessId}": {
+      "schema": "Business",
+      "description": "Global registry of all platform tenants"
+    },
+    "/verification_history/{historyId}": {
+      "schema": "VerificationHistory",
+      "description": "Audit logs for compliance and trust engine"
+    }
+  }
+}
